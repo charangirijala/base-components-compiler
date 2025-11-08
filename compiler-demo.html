@@ -1,0 +1,3426 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LWC Compiler Worker Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+
+      h1 {
+        color: #333;
+        margin-bottom: 10px;
+        font-size: 2em;
+      }
+
+      .subtitle {
+        color: #666;
+        margin-bottom: 30px;
+        font-size: 1.1em;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      button:hover {
+        background: #5568d3;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .output-section {
+        margin-top: 30px;
+      }
+
+      .output-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      h2 {
+        color: #333;
+        font-size: 1.5em;
+      }
+
+      .status {
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .status.idle {
+        background: #e0e0e0;
+        color: #666;
+      }
+
+      .status.compiling {
+        background: #fff3cd;
+        color: #856404;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      .status.success {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .status.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.6;
+        }
+      }
+
+      .output-box {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        min-height: 200px;
+        max-height: 500px;
+        overflow-y: auto;
+        font-family: "Courier New", monospace;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .log-entry {
+        margin-bottom: 10px;
+        padding: 8px;
+        border-radius: 4px;
+      }
+
+      .log-entry.info {
+        background: #e7f3ff;
+        color: #004085;
+      }
+
+      .log-entry.success {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .log-entry.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .log-entry.time {
+        color: #666;
+        font-size: 12px;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        margin: 0;
+      }
+
+      .clear-btn {
+        background: #6c757d;
+        padding: 8px 16px;
+        font-size: 14px;
+      }
+
+      .clear-btn:hover {
+        background: #5a6268;
+      }
+
+      .code-preview {
+        background: #282c34;
+        color: #abb2bf;
+        padding: 15px;
+        border-radius: 6px;
+        margin-top: 10px;
+        font-family: "Courier New", monospace;
+        font-size: 13px;
+        overflow-x: auto;
+      }
+
+      .info-box {
+        background: #e7f3ff;
+        border-left: 4px solid #667eea;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+      }
+
+      .info-box strong {
+        color: #004085;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 LWC Compiler Worker Demo</h1>
+      <p class="subtitle">
+        Test the Lightning Web Components compiler with the worker API
+      </p>
+
+      <div class="info-box">
+        <strong>ℹ️ How it works:</strong> This demo uses the compiler-worker.js
+        scraped from Salesforce's Component Library. Click any button below to
+        compile different LWC examples.
+      </div>
+
+      <div class="button-group">
+        <button id="compileBasic">Compile Basic DataTable</button>
+        <button id="compileSimple">Compile Simple Component</button>
+        <button id="compileCustom">Compile Custom Example</button>
+        <button id="compileParentChild">Compile Parent–Child Example</button>
+      </div>
+
+      <div class="output-section">
+        <div class="output-header">
+          <h2>Compilation Output</h2>
+          <div>
+            <span id="status" class="status idle">Idle</span>
+            <button class="clear-btn" id="clearBtn">Clear Output</button>
+          </div>
+        </div>
+        <div id="output" class="output-box">
+          <div class="log-entry info">
+            Ready to compile. Click a button above to start.
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="output-section"
+        id="previewSection"
+        style="
+          display: none;
+          margin-top: 30px;
+          border: 3px solid #0176d3;
+          background: #f3f3f3;
+        "
+      >
+        <div class="output-header" style="background: #0176d3; color: white">
+          <h2 style="color: white">🎨 Component Preview (Live Render)</h2>
+          <button
+            class="clear-btn"
+            id="clearPreviewBtn"
+            style="background: white; color: #0176d3"
+          >
+            Clear Preview
+          </button>
+        </div>
+        <div style="padding: 20px">
+          <iframe
+            id="preview"
+            style="
+              width: 100%;
+              height: 500px;
+              border: 2px solid #0176d3;
+              border-radius: 8px;
+              background: white;
+              display: block;
+            "
+          ></iframe>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import CompilerClient from "./compiler-client.js";
+
+      // Initialize the compiler client
+      const compiler = new CompilerClient("/public/compiler-worker.js");
+
+      // For direct worker access (backward compatibility)
+      const compilerWorker = compiler.worker;
+
+      // Message tracking (for backward compatibility)
+      let messageIdCounter = 0;
+      const pendingMessages = new Map();
+
+      // DOM elements
+      const outputDiv = document.getElementById("output");
+      const statusSpan = document.getElementById("status");
+      const clearBtn = document.getElementById("clearBtn");
+      const compileBasicBtn = document.getElementById("compileBasic");
+      const compileSimpleBtn = document.getElementById("compileSimple");
+      const compileCustomBtn = document.getElementById("compileCustom");
+      const previewSection = document.getElementById("previewSection");
+      const previewIframe = document.getElementById("preview");
+      const clearPreviewBtn = document.getElementById("clearPreviewBtn");
+
+      // Helper functions
+      function log(message, type = "info") {
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${type}`;
+
+        const time = new Date().toLocaleTimeString();
+        entry.innerHTML = `<span class="log-entry time">[${time}]</span> ${message}`;
+
+        outputDiv.appendChild(entry);
+        outputDiv.scrollTop = outputDiv.scrollHeight;
+      }
+
+      function setStatus(text, className) {
+        statusSpan.textContent = text;
+        statusSpan.className = `status ${className}`;
+      }
+
+      function disableButtons(disabled) {
+        compileBasicBtn.disabled = disabled;
+        compileSimpleBtn.disabled = disabled;
+        compileCustomBtn.disabled = disabled;
+      }
+
+      // Handle responses from the worker
+      compilerWorker.onmessage = function (event) {
+        const { messageId, res, error } = event.data;
+
+        const pending = pendingMessages.get(messageId);
+        if (pending) {
+          if (error) {
+            console.error("Compilation error:", error);
+            log(
+              `❌ <strong>Compilation Error:</strong><br><pre>${JSON.stringify(
+                error,
+                null,
+                2
+              )}</pre>`,
+              "error"
+            );
+            setStatus("Error", "error");
+            pending.reject(new Error(JSON.stringify(error)));
+          } else {
+            console.log("Compilation successful!", res);
+            log(`✅ <strong>Compilation Successful!</strong>`, "success");
+
+            // Display result summary
+            if (res) {
+              const summary = `
+                            <strong>Result Summary:</strong><br>
+                            - Compiled code length: ${
+                              res.code ? res.code.length : 0
+                            } characters<br>
+                            - Result keys: ${
+                              Object.keys(res || {}).length > 0
+                                ? Object.keys(res).join(", ")
+                                : "N/A"
+                            }<br>
+                        `;
+              log(summary, "success");
+
+              // Render the compiled component in iframe
+              if (res.code) {
+                log(
+                  `🎨 <strong>Rendering component in iframe below...</strong>`,
+                  "info"
+                );
+                renderComponent(res.code);
+              }
+            }
+
+            setStatus("Success", "success");
+            pending.resolve(res);
+          }
+          pendingMessages.delete(messageId);
+          disableButtons(false);
+        }
+      };
+
+      // Handle worker errors
+      compilerWorker.onerror = function (error) {
+        console.error("Worker error:", error);
+        log(`🔥 <strong>Worker Error:</strong> ${error.message}`, "error");
+        setStatus("Worker Error", "error");
+        disableButtons(false);
+      };
+
+      // Helper function to compile with the worker
+      function compileComponent(data, description) {
+        return new Promise((resolve, reject) => {
+          log(
+            `🔧 Starting compilation: <strong>${description}</strong>`,
+            "info"
+          );
+          setStatus("Compiling...", "compiling");
+          disableButtons(true);
+
+          const messageId = messageIdCounter++;
+          pendingMessages.set(messageId, { resolve, reject });
+          console.log("in compileComponent", data);
+          // Send the message with the exact structure the worker expects
+          compilerWorker.postMessage({
+            messageId: messageId,
+            data: data,
+          });
+        });
+      }
+
+      // Helper to escape HTML
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Helper to inject and run compiled code into iframe
+      function renderComponent(compiledCode) {
+        try {
+          console.log(
+            "renderComponent called with code length:",
+            compiledCode.length
+          );
+
+          // Show preview section
+          previewSection.style.display = "block";
+          console.log("Preview section display set to block");
+
+          // Get iframe document
+          if (!previewIframe) {
+            console.error("previewIframe is null!");
+            log(
+              `❌ <strong>Error:</strong> Preview iframe not found!`,
+              "error"
+            );
+            return;
+          }
+
+          const iframeDoc =
+            previewIframe.contentDocument ||
+            previewIframe.contentWindow.document;
+
+          if (!iframeDoc) {
+            console.error("Could not get iframe document!");
+            log(
+              `❌ <strong>Error:</strong> Could not access iframe document!`,
+              "error"
+            );
+            return;
+          }
+
+          console.log("Got iframe document successfully");
+
+          // Build complete HTML as data URI to avoid live-server injection
+          const htmlContent =
+            "<!DOCTYPE html>" +
+            "<html>" +
+            "<head>" +
+            '<meta charset="UTF-8">' +
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+            '<link rel="stylesheet" href="assets/styles/salesforce-lightning-design-system.min.css">' +
+            '<style>body { margin: 0; padding: 20px; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background: #f3f3f3; }</style>' +
+            "</head>" +
+            "<body>" +
+            '<div style="background: white; padding: 20px; border-radius: 8px;">' +
+            '<h3 style="color: #080707; margin-bottom: 20px;">Component Preview</h3>' +
+            "<main></main>" +
+            "</div>" +
+            '<script>process = {}; process.env = {}; process.env.NODE_ENV = "development";</' +
+            "script>" +
+            '<script src="https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.0/dist/synthetic-shadow.js"></' +
+            "script>" +
+            '<script src="https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc/1.6.0/engine.js"></' +
+            "script>" +
+            "<script>" +
+            compiledCode +
+            "</" +
+            "script>" +
+            "</body>" +
+            "</html>";
+
+          // Use srcdoc to avoid live-server interference
+          previewIframe.srcdoc = htmlContent;
+
+          console.log("Successfully wrote to iframe");
+
+          // Scroll to preview section
+          setTimeout(() => {
+            previewSection.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }, 100);
+
+          log(
+            `🎨 <strong>Component Rendered in iframe!</strong> Scroll down to see the Component Preview section.`,
+            "success"
+          );
+        } catch (error) {
+          console.error("Render error:", error);
+          log(`❌ <strong>Render Error:</strong> ${error.message}`, "error");
+        }
+      }
+
+      // Example 1: Basic DataTable (using CompilerClient helper)
+      function compileBasicDataTable() {
+        // Use CompilerClient's createComponentData helper
+        const compilationData = compiler.createComponentData(
+          "basic",
+          {
+            "generateData.js": `// seeded PRNG function
+function mulberry32(a) {
+    return function () {
+        let t = (a += 0x6d2b79f5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+const getRandom = mulberry32(12345);
+
+export default function generateData({ amountOfRecords }) {
+    return [...Array(amountOfRecords)].map((_, index) => {
+        return {
+            name: \`Name (\${index})\`,
+            website: 'www.salesforce.com',
+            amount: Math.floor(getRandom() * 100),
+            phone: \`\${Math.floor(getRandom() * 9000000000) + 1000000000}\`,
+            closeAt: new Date(
+                Date.now() + 86400000 * Math.ceil(getRandom() * 20)
+            ),
+        };
+    });
+}`,
+            "basic.js": `import { LightningElement } from 'lwc';
+import generateData from './generateData';
+
+const columns = [
+    { label: 'Label', fieldName: 'name' },
+    { label: 'Website', fieldName: 'website', type: 'url' },
+    { label: 'Phone', fieldName: 'phone', type: 'phone' },
+    { label: 'Balance', fieldName: 'amount', type: 'currency' },
+    { label: 'CloseAt', fieldName: 'closeAt', type: 'date' },
+];
+
+export default class BasicDatatable extends LightningElement {
+    data = [];
+    columns = columns;
+
+    connectedCallback() {
+        const data = generateData({ amountOfRecords: 100 });
+        this.data = data;
+    }
+}`,
+            "basic.html": `<template>
+    <div style="height: 300px;">
+        <lightning-datatable
+                key-field="id"
+                data={data}
+                columns={columns}>
+        </lightning-datatable>
+    </div>
+</template>`,
+          },
+          {
+            description:
+              "A basic data table that fetches data during initialization",
+          }
+        );
+
+        return compileComponent(compilationData, "Basic DataTable Component");
+      }
+
+      // Example 2: Simple Hello World Component (using CompilerClient helper)
+      function compileSimpleComponent() {
+        const compilationData = compiler.createComponentData(
+          "hello",
+          {
+            "hello.js": `import { LightningElement } from 'lwc';
+export default class Hello extends LightningElement {
+    greeting = 'Hello World';
+    name = 'Lightning Web Component';
+    
+    get message() {
+        return \`\${this.greeting}, \${this.name}!\`;
+    }
+
+    handleClick() {
+        console.log("Button clicked");
+    }
+
+    value = 'inProgress';
+
+    get options() {
+        return [
+            { label: 'New', value: 'new' },
+            { label: 'In Progress', value: 'inProgress' },
+            { label: 'Finished', value: 'finished' },
+        ];
+    }
+
+    handleChange(event) {
+        this.value = event.detail.value;
+    }
+}`,
+            "hello.html": `<template>
+    <div class="greeting">
+        <h1>{message}</h1>
+        <p>This is a simple LWC component.</p>
+        <lightning-button variant="brand" label="Click me" onclick={handleClick}>Click me</lightning-button>
+        <lightning-avatar src="/bad/image/url.jpg" initials="Sa" fallback-icon-name="standard:account" alternative-text="Salesforce" class="slds-m-right_small"></lightning-avatar>
+        <lightning-icon icon-name="standard:account" size="small"></lightning-icon>
+         <lightning-card  title="Hello">
+            <lightning-button label="New" slot="actions"></lightning-button>
+            <p class="slds-p-horizontal_small">Card Body (custom component)</p>
+            <p slot="footer">Card Footer</p>
+        </lightning-card>
+
+        <p><lightning-formatted-text value="Email salesforce.com and info.salesforce.com" ></lightning-formatted-text></p>
+    <p><lightning-formatted-text value="Email info@salesforce.com" ></lightning-formatted-text></p>
+    <p><lightning-formatted-text value="Email salesforce.com and info.salesforce.com" linkify></lightning-formatted-text></p>
+    <p><lightning-formatted-text value="Email info@salesforce.com" linkify></lightning-formatted-text></p>
+
+    <lightning-icon icon-name="action:approval" alternative-text="Approved" title="Approved"></lightning-icon>
+        <lightning-icon icon-name="action:delete" alternative-text="Delete" title="Delete"></lightning-icon>
+        <lightning-icon icon-name="action:new_note" alternative-text="New note" title="New note"></lightning-icon>
+        <lightning-icon icon-name="action:preview" alternative-text="Preview" title="Preview"></lightning-icon>
+
+        <lightning-input-address
+        address-label="Address"
+        street-label="Street"
+        city-label="City"
+        country-label="Country"
+        province-label="Province"
+        postal-code-label="PostalCode"
+        street="121 Spear St."
+        city="San Francisco"
+        country="US"
+        province="CA"
+        postal-code="94105"
+        required
+        field-level-help="Help Text for inputAddress field" ></lightning-input-address>
+
+         <div class="slds-box slds-p-around_none slds-m-top_x-small slds-m-bottom_medium slds-m-horizontal_none">
+        <lightning-layout>
+            <lightning-layout-item padding="around-small">
+                <div class="custom-box slds-box slds-p-around_medium slds-text-align_center">1</div>
+            </lightning-layout-item>
+            <lightning-layout-item padding="around-small">
+                <div class="custom-box slds-box slds-p-around_medium slds-text-align_center">2</div>
+            </lightning-layout-item>
+            <lightning-layout-item padding="around-small">
+                <div class="custom-box slds-box slds-p-around_medium slds-text-align_center">3</div>
+            </lightning-layout-item>
+            <lightning-layout-item padding="around-small">
+                <div class="custom-box slds-box slds-p-around_medium slds-text-align_center">4</div>
+            </lightning-layout-item>
+        </lightning-layout>
+    </div>
+     <lightning-combobox
+            name="progress"
+            label="Status"
+            value={value}
+            placeholder="Select Progress"
+            options={options}
+            onchange={handleChange} ></lightning-combobox>
+
+    <p>Selected value is: {value}</p>
+    <lightning-tabset>
+        <lightning-tab label="Item One">
+            One Content !
+        </lightning-tab>
+        <lightning-tab label="Item Two" title="2nd tab extended title">
+            Two Content !
+        </lightning-tab>
+        <lightning-tab label="Item Three">
+            Three Content !
+        </lightning-tab>
+    </lightning-tabset>
+
+    <p class="slds-m-bottom_medium">
+            A basic tile component.
+        </p>
+
+        <!-- Simple -->
+        <div class="slds-p-around_medium lgc-bg">
+            <lightning-tile label="Lightning component team" href="/path/to/somewhere">
+                <p class="slds-truncate" title="7 Members">7 Members</p>
+            </lightning-tile>
+        </div>
+
+        <lightning-badge label="Alpha" icon-name="standard:event"></lightning-badge>
+        <lightning-badge label="Beta" icon-name="standard:email" icon-position="end"></lightning-badge>
+        <lightning-badge label="Gamma" icon-name="custom:custom11"></lightning-badge>
+
+        <lightning-breadcrumbs>
+        <lightning-breadcrumb
+            label="Parent Account"
+            href="http://example.com/parent">
+        </lightning-breadcrumb>
+        <lightning-breadcrumb
+            label="Case"
+            href="http://example.com/case">
+        </lightning-breadcrumb>
+    </lightning-breadcrumbs>
+    </div>
+</template>`,
+          },
+          {
+            description: "A simple hello world greeting component",
+          }
+        );
+
+        return compileComponent(
+          compilationData,
+          "Simple Hello World Component"
+        );
+      }
+
+      // Example 3: Custom Counter Component (using CompilerClient helper)
+      function compileCustomComponent() {
+        const compilationData = compiler.createComponentData(
+          "counter",
+          {
+            "counter.js": `import { LightningElement, track } from 'lwc';
+
+export default class Counter extends LightningElement {
+    @track count = 0;
+    
+    increment() {
+        this.count++;
+    }
+    
+    decrement() {
+        this.count--;
+    }
+    
+    reset() {
+        this.count = 0;
+    }
+}`,
+            "counter.html": `<template>
+    <div class="counter-container">
+        <h2>Counter: {count}</h2>
+        <div class="button-group">
+            <lightning-button onclick={increment} label="Base+" variant="brand"></lightning-button>
+            <button onclick={decrement}>-</button>
+            <button onclick={reset}>Reset</button>
+        </div>
+        <div class="slds-p-around_medium lgc-bg">
+            <lightning-button-icon icon-name="utility:settings"  disabled alternative-text="Settings" title="Settings"></lightning-button-icon>
+            <lightning-button-icon icon-name="utility:adduser"   disabled alternative-text="Add user" class="slds-m-left_xx-small" title="Add user"></lightning-button-icon>
+            <lightning-button-icon icon-name="utility:delete"    disabled alternative-text="Delete"   class="slds-m-left_xx-small" title="Delete"></lightning-button-icon>
+            <lightning-button-icon icon-name="utility:save"      disabled alternative-text="Save"     class="slds-m-left_xx-small" title="Save"></lightning-button-icon>
+            <lightning-button-icon icon-name="utility:bookmark"  disabled alternative-text="Bookmark" class="slds-m-left_xx-small" title="Bookmark"></lightning-button-icon>
+            <lightning-button-icon icon-name="utility:zoomin"    disabled alternative-text="Zoom in"  class="slds-m-left_xx-small" title="Zoom in"></lightning-button-icon>
+            <lightning-button-icon icon-name="utility:zoomout"   disabled alternative-text="Zoom out" class="slds-m-left_xx-small" title="Zoom out"></lightning-button-icon>
+        </div>
+    </div>
+</template>`,
+            "counter.css": `.counter-container {
+    padding: 20px;
+    text-align: center;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+}`,
+          },
+          {
+            description: "An interactive counter component with CSS styling",
+          }
+        );
+
+        return compileComponent(compilationData, "Custom Counter Component");
+      }
+
+      function compileParentChildExample() {
+        // Manually create the file structure with separate directories for each component
+        const fileEntries = {};
+        let fileCounter = 0;
+
+        // Create root directory
+        fileEntries["<root>"] = {
+          type: "directory",
+          id: "<root>",
+          name: "root",
+          path: "root",
+          childIds: [
+            "app-dir",
+            "child-controls-dir",
+            "child-display-dir",
+            "child-logger-dir",
+          ],
+          opened: true,
+        };
+
+        // Create app directory
+        const appFileIds = [];
+        fileEntries["app-dir"] = {
+          type: "directory",
+          id: "app-dir",
+          name: "app",
+          path: "root/app",
+          childIds: appFileIds,
+          opened: true,
+        };
+
+        // Add app files
+        const appJsId = `file-${fileCounter++}`;
+        appFileIds.push(appJsId);
+        fileEntries[appJsId] = {
+          type: "file",
+          id: appJsId,
+          name: "app.js",
+          path: "root/app/app.js",
+          content: `import { LightningElement, track } from 'lwc';
+
+export default class App extends LightningElement {
+    @track count = 0;
+    @track logs = [];
+
+    handleIncrement() {
+        this.count++;
+        this.addLog('Incremented');
+        this.notifyLogger();
+    }
+
+    handleDecrement() {
+        this.count--;
+        this.addLog('Decremented');
+        this.notifyLogger();
+    }
+
+    handleReset() {
+        this.count = 0;
+        this.addLog('Reset to 0');
+        this.notifyLogger();
+    }
+
+    addLog(message) {
+        const time = new Date().toLocaleTimeString();
+        this.logs = [...this.logs, \`\${time} - \${message}\`];
+    }
+
+    notifyLogger() {
+        const logger = this.template.querySelector('c-child-logger');
+        if (logger) {
+            logger.refreshLogs(this.logs);}
+        }
+    }`,
+          childIds: [],
+          opened: false,
+        };
+
+        const appHtmlId = `file-${fileCounter++}`;
+        appFileIds.push(appHtmlId);
+        fileEntries[appHtmlId] = {
+          type: "file",
+          id: appHtmlId,
+          name: "app.html",
+          path: "root/app/app.html",
+          content: `<template>
+    <lightning-card title="Parent Component">
+        <p class="slds-p-horizontal_small">This component manages count and communicates with children.</p>
+        <c-child-controls 
+            onincrement={handleIncrement} 
+            ondecrement={handleDecrement} 
+            onreset={handleReset}>
+        </c-child-controls>
+        
+        <c-child-display count={count}></c-child-display>
+        <c-child-logger></c-child-logger>
+    </lightning-card>
+</template>`,
+          childIds: [],
+          opened: false,
+        };
+
+        const appCssId = `file-${fileCounter++}`;
+        appFileIds.push(appCssId);
+        fileEntries[appCssId] = {
+          type: "file",
+          id: appCssId,
+          name: "app.css",
+          path: "root/app/app.css",
+          content: `.slds-card {
+    max-width: 600px;
+    margin: 20px auto;
+    display: block;
+}`,
+          childIds: [],
+          opened: false,
+        };
+
+        // Create child-controls directory
+        const childControlsFileIds = [];
+        fileEntries["child-controls-dir"] = {
+          type: "directory",
+          id: "child-controls-dir",
+          name: "child-controls",
+          path: "root/child-controls",
+          childIds: childControlsFileIds,
+          opened: true,
+        };
+
+        const childControlsJsId = `file-${fileCounter++}`;
+        childControlsFileIds.push(childControlsJsId);
+        fileEntries[childControlsJsId] = {
+          type: "file",
+          id: childControlsJsId,
+          name: "child-controls.js",
+          path: "root/child-controls/child-controls.js",
+          content: `import { LightningElement } from 'lwc';
+
+export default class ChildControls extends LightningElement {
+    handleIncrement() {
+        this.dispatchEvent(new CustomEvent('increment'));
+    }
+
+    handleDecrement() {
+        this.dispatchEvent(new CustomEvent('decrement'));
+    }
+
+    handleReset() {
+        this.dispatchEvent(new CustomEvent('reset'));
+    }
+}`,
+          childIds: [],
+          opened: false,
+        };
+
+        const childControlsHtmlId = `file-${fileCounter++}`;
+        childControlsFileIds.push(childControlsHtmlId);
+        fileEntries[childControlsHtmlId] = {
+          type: "file",
+          id: childControlsHtmlId,
+          name: "child-controls.html",
+          path: "root/child-controls/child-controls.html",
+          content: `<template>
+    <div class="slds-p-around_medium slds-align_absolute-center">
+        <lightning-button variant="brand" label="+" onclick={handleIncrement}></lightning-button>
+        <lightning-button variant="destructive" label="-" onclick={handleDecrement} class="slds-m-left_small"></lightning-button>
+        <lightning-button label="Reset" onclick={handleReset} class="slds-m-left_small"></lightning-button>
+    </div>
+</template>`,
+          childIds: [],
+          opened: false,
+        };
+
+        // Create child-display directory
+        const childDisplayFileIds = [];
+        fileEntries["child-display-dir"] = {
+          type: "directory",
+          id: "child-display-dir",
+          name: "child-display",
+          path: "root/child-display",
+          childIds: childDisplayFileIds,
+          opened: true,
+        };
+
+        const childDisplayJsId = `file-${fileCounter++}`;
+        childDisplayFileIds.push(childDisplayJsId);
+        fileEntries[childDisplayJsId] = {
+          type: "file",
+          id: childDisplayJsId,
+          name: "child-display.js",
+          path: "root/child-display/child-display.js",
+          content: `import { LightningElement, api } from 'lwc';
+
+export default class ChildDisplay extends LightningElement {
+    @api count = 0;
+}`,
+          childIds: [],
+          opened: false,
+        };
+
+        const childDisplayHtmlId = `file-${fileCounter++}`;
+        childDisplayFileIds.push(childDisplayHtmlId);
+        fileEntries[childDisplayHtmlId] = {
+          type: "file",
+          id: childDisplayHtmlId,
+          name: "child-display.html",
+          path: "root/child-display/child-display.html",
+          content: `<template>
+    <div class="slds-p-around_medium slds-align_absolute-center">
+        <lightning-badge label={count} icon-name="utility:number_input"></lightning-badge>
+        <p class="slds-m-top_small">Current count passed from parent</p>
+    </div>
+</template>`,
+          childIds: [],
+          opened: false,
+        };
+
+        // Create child-logger directory
+        const childLoggerFileIds = [];
+        fileEntries["child-logger-dir"] = {
+          type: "directory",
+          id: "child-logger-dir",
+          name: "child-logger",
+          path: "root/child-logger",
+          childIds: childLoggerFileIds,
+          opened: true,
+        };
+
+        const childLoggerJsId = `file-${fileCounter++}`;
+        childLoggerFileIds.push(childLoggerJsId);
+        fileEntries[childLoggerJsId] = {
+          type: "file",
+          id: childLoggerJsId,
+          name: "child-logger.js",
+          path: "root/child-logger/child-logger.js",
+          content: `import { LightningElement, api, track } from 'lwc';
+
+export default class ChildLogger extends LightningElement {
+    @track logs = [];
+
+    @api refreshLogs(newLogs) {
+        this.logs = newLogs || [];
+    }
+}`,
+          childIds: [],
+          opened: false,
+        };
+
+        const childLoggerHtmlId = `file-${fileCounter++}`;
+        childLoggerFileIds.push(childLoggerHtmlId);
+        fileEntries[childLoggerHtmlId] = {
+          type: "file",
+          id: childLoggerHtmlId,
+          name: "child-logger.html",
+          path: "root/child-logger/child-logger.html",
+          content: `<template>
+    <div class="slds-box slds-m-around_medium">
+        <h3 class="slds-text-heading_small slds-m-bottom_small">🪵 Activity Log</h3>
+        <template if:true={logs}>
+            <template for:each={logs} for:item="item">
+                <p key={item}>{item}</p>
+            </template>
+        </template>
+        <template if:false={logs}>
+            <p>No actions yet</p>
+        </template>
+    </div>
+</template>`,
+          childIds: [],
+          opened: false,
+        };
+
+        // Create the compilation data structure
+        const compilationData = {
+          files: fileEntries,
+          project: {
+            name: "app",
+            description:
+              "Parent–Child communication demo with data flow and event dispatching.",
+            namespace: "c",
+            minify: false,
+            compat: false,
+            mainModule: "app",
+            alias: undefined,
+            compileonchange: true,
+            compiled: undefined,
+            compiledComponentsVersion: undefined,
+            compiledVersion: undefined,
+            componentsVersion: undefined,
+            isLoading: false,
+            lwcVersion: undefined,
+            nativeShadow: undefined,
+            savefailed: false,
+            sldsVersion: undefined,
+            template: undefined,
+            version: undefined,
+          },
+          runtime: {
+            lwc: {
+              versions: [
+                {
+                  version: "1.6.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc/1.6.0/lwc-compiler.js",
+                },
+              ],
+              stable: "1.6.0",
+            },
+            engine: {
+              versions: [
+                {
+                  version: "1.7.10-228.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc/1.7.10-228.5/engine.js",
+                },
+                {
+                  version: "1.6.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc/1.6.0/engine.js",
+                },
+              ],
+              tags: {
+                next: "1.18.0",
+                latest: "1.17.6",
+                canary: "1.18.0-alpha.3",
+                spring20: "1.1.13-224.8",
+                winter20: "1.0.2-222.26",
+                summer20: "1.3.7-226.7",
+                spring19: "0.34.7",
+                summer19: "0.37.4-220.2",
+                winter19: "0.40.1-222.1",
+                winter21: "1.7.10-228.5",
+                spring21: "1.9.3-230.1",
+                summer21: "1.17.9",
+              },
+              stable: "1.6.0",
+            },
+            components: {
+              versions: [
+                {
+                  version: "1.4.4-alpha",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-components/1.4.4-alpha/lwc-components-lightning.json",
+                },
+                {
+                  version: "1.8.6-alpha",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-components/1.8.6-alpha/lwc-components-lightning.json",
+                },
+                {
+                  version: "1.10.8-alpha",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-components/1.10.8-alpha/lwc-components-lightning.json",
+                },
+                {
+                  version: "1.11.3-alpha",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-components/1.11.3-alpha/lwc-components-lightning.json",
+                },
+              ],
+              tags: {
+                "228-patch": "1.8.6-alpha",
+                "230-patch": "1.10.8-alpha",
+                latest: "1.11.3-alpha",
+                main: "1.4.4-alpha",
+              },
+              stable: "1.8.6-alpha",
+            },
+            slds: {
+              versions: [
+                {
+                  version: "2.18.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/slds/2.18.0",
+                },
+                {
+                  version: "2.18.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/slds/2.18.1",
+                },
+                {
+                  version: "2.19.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/slds/2.19.0",
+                },
+                {
+                  version: "2.20.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/slds/2.20.0",
+                },
+                {
+                  version: "2.20.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/slds/2.20.1",
+                },
+                {
+                  version: "2.21.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/slds/2.21.0",
+                },
+                {
+                  version: "2.21.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/slds/2.21.1",
+                },
+              ],
+              tags: {
+                latest: "2.21.1",
+                lwc: "3.0.0-alpha.12",
+                "winter-19": "2.7.5",
+                "spring-19": "2.8.3",
+                "summer-18": "2.6.2",
+                "summer-19": "2.9.5",
+                "winter-20": "2.10.2",
+                "spring-20": "2.11.9",
+                "summer-20": "2.12.2",
+                "winter-21": "2.13.7",
+                "spring-21": "2.14.3",
+                "summer-21": "2.15.9",
+                main: "2.22.0-alpha.2",
+                "winter-22": "2.16.2",
+                "spring-22": "2.17.5",
+                "summer-22": "2.18.1",
+                "winter-23": "2.19.0",
+                "spring-23": "2.20.1",
+                "summer-23": "2.21.1",
+                "winter-24": "2.22.0-alpha.2",
+              },
+              stable: "2.13.7",
+            },
+            showVersions: false,
+            standalone: true,
+            isLoading: false,
+            isLoaded: true,
+            "wire-service": {
+              versions: [
+                {
+                  version: "1.7.10",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.7.10/wire-service.json",
+                },
+                {
+                  version: "1.7.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.7.11/wire-service.json",
+                },
+                {
+                  version: "1.7.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.7.12/wire-service.json",
+                },
+                {
+                  version: "1.7.13",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.7.13/wire-service.json",
+                },
+                {
+                  version: "1.7.14",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.7.14/wire-service.json",
+                },
+                {
+                  version: "1.8.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.0/wire-service.json",
+                },
+                {
+                  version: "1.8.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.1/wire-service.json",
+                },
+                {
+                  version: "1.8.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.2/wire-service.json",
+                },
+                {
+                  version: "1.8.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.3/wire-service.json",
+                },
+                {
+                  version: "1.8.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.4/wire-service.json",
+                },
+                {
+                  version: "1.8.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.5/wire-service.json",
+                },
+                {
+                  version: "1.8.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.6/wire-service.json",
+                },
+                {
+                  version: "1.8.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.8.7/wire-service.json",
+                },
+                {
+                  version: "1.9.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.0/wire-service.json",
+                },
+                {
+                  version: "1.9.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.1/wire-service.json",
+                },
+                {
+                  version: "1.9.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.2/wire-service.json",
+                },
+                {
+                  version: "1.9.3-230.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.3-230.1/wire-service.json",
+                },
+                {
+                  version: "1.9.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.3/wire-service.json",
+                },
+                {
+                  version: "1.9.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.4/wire-service.json",
+                },
+                {
+                  version: "1.9.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.5/wire-service.json",
+                },
+                {
+                  version: "1.9.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.6/wire-service.json",
+                },
+                {
+                  version: "1.9.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.7/wire-service.json",
+                },
+                {
+                  version: "1.9.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.9.8/wire-service.json",
+                },
+                {
+                  version: "1.10.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.10.0/wire-service.json",
+                },
+                {
+                  version: "1.10.1-232.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.10.1-232.1/wire-service.json",
+                },
+                {
+                  version: "1.10.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.10.1/wire-service.json",
+                },
+                {
+                  version: "1.11.0-232.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.11.0-232.1/wire-service.json",
+                },
+                {
+                  version: "1.11.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.11.0/wire-service.json",
+                },
+                {
+                  version: "1.11.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.11.1/wire-service.json",
+                },
+                {
+                  version: "1.11.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.11.2/wire-service.json",
+                },
+                {
+                  version: "1.11.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.11.3/wire-service.json",
+                },
+                {
+                  version: "1.11.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.11.4/wire-service.json",
+                },
+                {
+                  version: "1.16.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.16.4/wire-service.json",
+                },
+                {
+                  version: "1.17.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.0/wire-service.json",
+                },
+                {
+                  version: "1.17.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.1/wire-service.json",
+                },
+                {
+                  version: "1.17.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.2/wire-service.json",
+                },
+                {
+                  version: "1.17.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.3/wire-service.json",
+                },
+                {
+                  version: "1.17.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.4/wire-service.json",
+                },
+                {
+                  version: "1.17.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.5/wire-service.json",
+                },
+                {
+                  version: "1.17.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.6/wire-service.json",
+                },
+                {
+                  version: "1.17.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.8/wire-service.json",
+                },
+                {
+                  version: "1.17.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.17.9/wire-service.json",
+                },
+                {
+                  version: "1.18.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/1.18.0/wire-service.json",
+                },
+                {
+                  version: "2.0.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.0.0/wire-service.json",
+                },
+                {
+                  version: "2.1.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.1.0/wire-service.json",
+                },
+                {
+                  version: "2.1.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.1.1/wire-service.json",
+                },
+                {
+                  version: "2.1.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.1.2/wire-service.json",
+                },
+                {
+                  version: "2.2.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.0/wire-service.json",
+                },
+                {
+                  version: "2.2.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.1/wire-service.json",
+                },
+                {
+                  version: "2.2.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.2/wire-service.json",
+                },
+                {
+                  version: "2.2.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.3/wire-service.json",
+                },
+                {
+                  version: "2.2.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.4/wire-service.json",
+                },
+                {
+                  version: "2.2.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.5/wire-service.json",
+                },
+                {
+                  version: "2.2.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.6/wire-service.json",
+                },
+                {
+                  version: "2.2.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.7/wire-service.json",
+                },
+                {
+                  version: "2.2.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.8/wire-service.json",
+                },
+                {
+                  version: "2.2.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.9/wire-service.json",
+                },
+                {
+                  version: "2.2.10-234.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.10-234.0/wire-service.json",
+                },
+                {
+                  version: "2.2.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.11/wire-service.json",
+                },
+                {
+                  version: "2.2.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.2.12/wire-service.json",
+                },
+                {
+                  version: "2.3.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.3.0/wire-service.json",
+                },
+                {
+                  version: "2.3.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.3.1/wire-service.json",
+                },
+                {
+                  version: "2.3.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.3.2/wire-service.json",
+                },
+                {
+                  version: "2.3.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.3.3/wire-service.json",
+                },
+                {
+                  version: "2.3.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.3.4/wire-service.json",
+                },
+                {
+                  version: "2.3.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.3.7/wire-service.json",
+                },
+                {
+                  version: "2.4.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.4.0/wire-service.json",
+                },
+                {
+                  version: "2.5.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.0/wire-service.json",
+                },
+                {
+                  version: "2.5.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.1/wire-service.json",
+                },
+                {
+                  version: "2.5.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.2/wire-service.json",
+                },
+                {
+                  version: "2.5.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.3/wire-service.json",
+                },
+                {
+                  version: "2.5.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.4/wire-service.json",
+                },
+                {
+                  version: "2.5.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.6/wire-service.json",
+                },
+                {
+                  version: "2.5.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.7/wire-service.json",
+                },
+                {
+                  version: "2.5.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.8/wire-service.json",
+                },
+                {
+                  version: "2.5.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.9/wire-service.json",
+                },
+                {
+                  version: "2.5.10",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.10/wire-service.json",
+                },
+                {
+                  version: "2.5.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.11/wire-service.json",
+                },
+                {
+                  version: "2.5.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.12/wire-service.json",
+                },
+                {
+                  version: "2.5.13",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.5.13/wire-service.json",
+                },
+                {
+                  version: "2.6.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.6.0/wire-service.json",
+                },
+                {
+                  version: "2.6.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.6.1/wire-service.json",
+                },
+                {
+                  version: "2.6.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.6.2/wire-service.json",
+                },
+                {
+                  version: "2.6.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.6.3/wire-service.json",
+                },
+                {
+                  version: "2.7.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.7.0/wire-service.json",
+                },
+                {
+                  version: "2.7.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.7.1/wire-service.json",
+                },
+                {
+                  version: "2.7.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.7.2/wire-service.json",
+                },
+                {
+                  version: "2.7.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.7.3/wire-service.json",
+                },
+                {
+                  version: "2.7.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.7.4/wire-service.json",
+                },
+                {
+                  version: "2.8.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.8.0/wire-service.json",
+                },
+                {
+                  version: "2.9.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.9.0/wire-service.json",
+                },
+                {
+                  version: "2.10.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.10.0/wire-service.json",
+                },
+                {
+                  version: "2.11.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.0/wire-service.json",
+                },
+                {
+                  version: "2.11.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.1/wire-service.json",
+                },
+                {
+                  version: "2.11.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.3/wire-service.json",
+                },
+                {
+                  version: "2.11.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.4/wire-service.json",
+                },
+                {
+                  version: "2.11.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.5/wire-service.json",
+                },
+                {
+                  version: "2.11.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.6/wire-service.json",
+                },
+                {
+                  version: "2.11.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.7/wire-service.json",
+                },
+                {
+                  version: "2.11.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.11.8/wire-service.json",
+                },
+                {
+                  version: "2.12.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.12.0/wire-service.json",
+                },
+                {
+                  version: "2.12.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.12.1/wire-service.json",
+                },
+                {
+                  version: "2.13.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.13.0/wire-service.json",
+                },
+                {
+                  version: "2.13.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.13.1/wire-service.json",
+                },
+                {
+                  version: "2.13.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.13.2/wire-service.json",
+                },
+                {
+                  version: "2.13.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.13.3/wire-service.json",
+                },
+                {
+                  version: "2.13.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.13.4/wire-service.json",
+                },
+                {
+                  version: "2.14.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.14.0/wire-service.json",
+                },
+                {
+                  version: "2.14.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.14.1/wire-service.json",
+                },
+                {
+                  version: "2.14.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.14.2/wire-service.json",
+                },
+                {
+                  version: "2.15.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.15.0/wire-service.json",
+                },
+                {
+                  version: "2.16.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.16.0/wire-service.json",
+                },
+                {
+                  version: "2.17.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.17.0/wire-service.json",
+                },
+                {
+                  version: "2.18.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.18.0/wire-service.json",
+                },
+                {
+                  version: "2.19.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.19.0/wire-service.json",
+                },
+                {
+                  version: "2.19.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.19.1/wire-service.json",
+                },
+                {
+                  version: "2.20.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.0/wire-service.json",
+                },
+                {
+                  version: "2.20.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.1/wire-service.json",
+                },
+                {
+                  version: "2.20.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.2/wire-service.json",
+                },
+                {
+                  version: "2.20.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.3/wire-service.json",
+                },
+                {
+                  version: "2.20.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.4/wire-service.json",
+                },
+                {
+                  version: "2.20.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.5/wire-service.json",
+                },
+                {
+                  version: "2.20.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.6/wire-service.json",
+                },
+                {
+                  version: "2.20.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.20.7/wire-service.json",
+                },
+                {
+                  version: "2.21.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.21.0/wire-service.json",
+                },
+                {
+                  version: "2.21.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.21.1/wire-service.json",
+                },
+                {
+                  version: "2.22.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.22.0/wire-service.json",
+                },
+                {
+                  version: "2.23.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.23.0/wire-service.json",
+                },
+                {
+                  version: "2.23.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.23.1/wire-service.json",
+                },
+                {
+                  version: "2.23.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.23.2/wire-service.json",
+                },
+                {
+                  version: "2.23.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.23.3/wire-service.json",
+                },
+                {
+                  version: "2.23.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.23.4/wire-service.json",
+                },
+                {
+                  version: "2.23.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.23.5/wire-service.json",
+                },
+                {
+                  version: "2.23.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.23.6/wire-service.json",
+                },
+                {
+                  version: "2.24.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.24.0/wire-service.json",
+                },
+                {
+                  version: "2.25.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.25.0/wire-service.json",
+                },
+                {
+                  version: "2.25.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.25.1/wire-service.json",
+                },
+                {
+                  version: "2.26.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.26.0/wire-service.json",
+                },
+                {
+                  version: "2.26.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.26.1/wire-service.json",
+                },
+                {
+                  version: "2.26.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.26.2/wire-service.json",
+                },
+                {
+                  version: "2.27.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.27.0/wire-service.json",
+                },
+                {
+                  version: "2.28.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.28.0/wire-service.json",
+                },
+                {
+                  version: "2.28.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.28.1/wire-service.json",
+                },
+                {
+                  version: "2.29.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.29.0/wire-service.json",
+                },
+                {
+                  version: "2.30.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.30.0/wire-service.json",
+                },
+                {
+                  version: "2.30.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.30.1/wire-service.json",
+                },
+                {
+                  version: "2.30.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.30.2/wire-service.json",
+                },
+                {
+                  version: "2.30.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.30.3/wire-service.json",
+                },
+                {
+                  version: "2.31.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.0/wire-service.json",
+                },
+                {
+                  version: "2.31.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.1/wire-service.json",
+                },
+                {
+                  version: "2.31.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.2/wire-service.json",
+                },
+                {
+                  version: "2.31.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.3/wire-service.json",
+                },
+                {
+                  version: "2.31.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.4/wire-service.json",
+                },
+                {
+                  version: "2.31.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.5/wire-service.json",
+                },
+                {
+                  version: "2.31.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.6/wire-service.json",
+                },
+                {
+                  version: "2.31.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.7/wire-service.json",
+                },
+                {
+                  version: "2.31.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.31.8/wire-service.json",
+                },
+                {
+                  version: "2.32.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.32.0/wire-service.json",
+                },
+                {
+                  version: "2.32.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.32.1/wire-service.json",
+                },
+                {
+                  version: "2.33.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.33.0/wire-service.json",
+                },
+                {
+                  version: "2.34.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.34.0/wire-service.json",
+                },
+                {
+                  version: "2.35.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.35.0/wire-service.json",
+                },
+                {
+                  version: "2.35.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.35.1/wire-service.json",
+                },
+                {
+                  version: "2.35.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.35.2/wire-service.json",
+                },
+                {
+                  version: "2.36.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.36.0/wire-service.json",
+                },
+                {
+                  version: "2.37.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.37.0/wire-service.json",
+                },
+                {
+                  version: "2.37.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.37.1/wire-service.json",
+                },
+                {
+                  version: "2.37.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.37.2/wire-service.json",
+                },
+                {
+                  version: "2.37.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.37.3/wire-service.json",
+                },
+                {
+                  version: "2.38.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.38.0/wire-service.json",
+                },
+                {
+                  version: "2.38.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.38.1/wire-service.json",
+                },
+                {
+                  version: "2.39.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.39.0/wire-service.json",
+                },
+                {
+                  version: "2.39.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.39.1/wire-service.json",
+                },
+                {
+                  version: "2.40.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.40.0/wire-service.json",
+                },
+                {
+                  version: "2.40.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.40.1/wire-service.json",
+                },
+                {
+                  version: "2.41.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.41.0/wire-service.json",
+                },
+                {
+                  version: "2.41.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.41.1/wire-service.json",
+                },
+                {
+                  version: "2.41.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.41.2/wire-service.json",
+                },
+                {
+                  version: "2.41.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.41.3/wire-service.json",
+                },
+                {
+                  version: "2.41.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.41.4/wire-service.json",
+                },
+                {
+                  version: "2.42.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.42.0/wire-service.json",
+                },
+                {
+                  version: "2.43.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.43.0/wire-service.json",
+                },
+                {
+                  version: "2.44.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.44.0/wire-service.json",
+                },
+                {
+                  version: "2.45.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.45.0/wire-service.json",
+                },
+                {
+                  version: "2.45.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.45.1/wire-service.json",
+                },
+                {
+                  version: "2.45.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.45.2/wire-service.json",
+                },
+                {
+                  version: "2.45.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.45.3/wire-service.json",
+                },
+                {
+                  version: "2.45.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.45.4/wire-service.json",
+                },
+                {
+                  version: "2.45.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.45.5/wire-service.json",
+                },
+                {
+                  version: "2.46.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.46.0/wire-service.json",
+                },
+                {
+                  version: "2.47.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.47.0/wire-service.json",
+                },
+                {
+                  version: "2.48.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.48.0/wire-service.json",
+                },
+                {
+                  version: "2.49.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.49.0/wire-service.json",
+                },
+                {
+                  version: "2.49.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/wire-service/2.49.1/wire-service.json",
+                },
+              ],
+              tags: {
+                next: "2.2.1",
+                latest: "2.49.1",
+                canary: "2.11.3-238prod.0",
+                spring20: "1.1.13-224.8",
+                winter20: "1.0.2-222.26",
+                summer20: "1.3.7-226.7",
+                spring19: "0.34.7",
+                summer19: "0.37.4-220.2",
+                winter19: "0.40.1-222.1",
+                winter21: "1.7.10-228.5",
+                spring21: "1.9.3-230.1",
+                summer21: "1.17.9",
+                winter22: "2.2.12",
+                spring22: "2.5.13",
+                "backport-2.6": "2.6.3",
+                summer22: "2.11.8",
+                winter23: "2.20.7",
+                spring23: "2.31.8",
+                "lbc-avante-garde": "2.40.2-lbc",
+              },
+              stable: "2.49.1",
+            },
+            "lwc-synthetic-shadow": {
+              versions: [
+                {
+                  version: "0.38.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.38.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.38.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.38.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.38.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.38.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.39.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.39.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.39.1-222.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.39.1-222.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.39.1-222.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.39.1-222.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.39.1-222.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.39.1-222.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.39.1-222.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.39.1-222.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.39.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.39.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1-222.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1-222.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.40.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.40.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.41.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.41.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.228.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.228.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.228.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.228.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "0.228.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/0.228.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.10",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.10/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.11/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.12/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.13",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.13/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.14",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.14/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.15",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.15/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.16",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.16/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.17",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.17/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.18",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.18/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.19",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.19/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.20",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.20/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.21",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.21/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.22",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.22/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.23",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.23/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.24",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.24/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.25",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.25/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.26",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.26/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2-222.1000",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2-222.1000/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.0.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.0.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.10",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.10/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.11/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.12/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13-224.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13-224.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.13",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.13/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.14",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.14/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.15",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.15/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.1.16",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.1.16/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.2.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.2.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.2.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.2.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.2.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.2.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.2.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.2.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.2.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.2.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.2.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.2.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-226.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-226.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-228.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-228.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-228.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-228.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-228.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-228.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7-228.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7-228.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.10",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.10/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.11/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.3.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.3.12/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.4.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.4.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.5.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.5.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.5.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.5.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.5.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.5.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.5.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.5.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.5.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.5.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.6.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.6.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.10-228.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.10-228.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.10-228.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.10-228.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.10-228.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.10-228.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.10-228.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.10-228.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.10-228.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.10-228.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.10",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.10/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.11/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.12/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.13",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.13/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.7.14",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.7.14/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.8.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.8.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.3-230.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.3-230.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.9.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.9.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.10.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.10.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.10.1-232.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.10.1-232.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.10.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.10.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.11.0-232.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.11.0-232.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.11.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.11.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.11.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.11.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.11.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.11.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.11.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.11.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.11.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.11.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.16.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.16.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.17.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.17.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "1.18.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/1.18.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.0.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.0.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.1.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.1.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.1.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.1.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.1.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.1.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.10-234.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.10-234.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.11/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.2.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.2.12/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.3.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.3.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.3.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.3.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.3.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.3.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.3.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.3.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.3.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.3.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.3.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.3.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.4.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.4.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.9",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.9/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.10",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.10/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.11",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.11/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.12",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.12/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.5.13",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.5.13/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.6.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.6.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.6.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.6.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.6.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.6.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.6.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.6.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.7.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.7.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.7.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.7.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.7.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.7.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.7.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.7.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.7.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.7.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.8.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.8.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.9.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.9.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.10.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.10.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.11.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.11.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.12.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.12.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.12.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.12.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.13.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.13.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.13.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.13.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.13.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.13.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.13.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.13.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.13.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.13.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.14.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.14.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.14.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.14.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.14.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.14.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.15.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.15.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.16.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.16.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.17.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.17.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.18.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.18.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.19.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.19.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.19.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.19.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.20.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.20.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.21.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.21.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.21.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.21.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.22.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.22.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.23.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.23.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.23.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.23.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.23.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.23.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.23.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.23.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.23.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.23.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.23.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.23.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.23.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.23.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.24.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.24.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.25.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.25.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.25.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.25.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.26.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.26.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.26.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.26.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.26.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.26.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.27.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.27.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.28.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.28.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.28.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.28.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.29.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.29.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.30.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.30.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.30.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.30.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.30.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.30.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.30.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.30.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.6",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.6/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.7",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.7/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.31.8",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.31.8/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.32.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.32.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.32.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.32.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.33.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.33.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.34.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.34.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.35.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.35.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.35.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.35.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.35.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.35.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.36.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.36.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.37.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.37.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.37.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.37.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.37.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.37.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.37.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.37.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.38.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.38.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.38.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.38.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.39.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.39.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.39.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.39.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.40.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.40.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.40.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.40.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.41.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.41.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.41.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.41.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.41.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.41.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.41.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.41.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.41.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.41.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.42.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.42.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.43.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.43.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.44.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.44.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.45.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.45.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.45.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.45.1/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.45.2",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.45.2/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.45.3",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.45.3/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.45.4",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.45.4/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.45.5",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.45.5/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.46.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.46.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.47.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.47.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.48.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.48.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.49.0",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.49.0/lwc-synthetic-shadow.json",
+                },
+                {
+                  version: "2.49.1",
+                  url: "https://d3nv1vpfin7fut.cloudfront.net/api/runtime/lwc-synthetic-shadow/2.49.1/lwc-synthetic-shadow.json",
+                },
+              ],
+              tags: {
+                canary: "2.11.3-238prod.0",
+                latest: "2.49.1",
+                next: "2.2.1",
+                spring20: "1.1.13-224.8",
+                winter20: "1.0.2-222.26",
+                summer20: "1.3.7-226.7",
+                winter19: "0.40.1-222.1",
+                winter21: "1.7.10-228.5",
+                spring21: "1.9.3-230.1",
+                summer21: "1.17.9",
+                winter22: "2.2.12",
+                spring22: "2.5.13",
+                "backport-2.6": "2.6.3",
+                summer22: "2.11.8",
+                winter23: "2.20.7",
+                spring23: "2.31.8",
+                "lbc-avante-garde": "2.40.2-lbc",
+              },
+              stable: "2.49.1",
+            },
+            CONTAINER_URL:
+              "https://developer.salesforce.com/docs/component-library/tools/playground",
+            APP_SLDS_VERSION: "2.8.3",
+          },
+        };
+
+        return compileComponent(
+          compilationData,
+          "Parent–Child Communication Example"
+        );
+      }
+
+      // Event listeners
+      compileBasicBtn.addEventListener("click", () => {
+        compileBasicDataTable().catch((err) => {
+          console.error("Compilation failed:", err);
+        });
+      });
+      const compileParentChildBtn =
+        document.getElementById("compileParentChild");
+      compileParentChildBtn.addEventListener("click", () => {
+        compileParentChildExample().catch((err) => {
+          console.error("Compilation failed:", err);
+        });
+      });
+
+      compileSimpleBtn.addEventListener("click", () => {
+        compileSimpleComponent().catch((err) => {
+          console.error("Compilation failed:", err);
+        });
+      });
+
+      compileCustomBtn.addEventListener("click", () => {
+        compileCustomComponent().catch((err) => {
+          console.error("Compilation failed:", err);
+        });
+      });
+
+      clearBtn.addEventListener("click", () => {
+        outputDiv.innerHTML =
+          '<div class="log-entry info">Output cleared. Ready for next compilation.</div>';
+        setStatus("Idle", "idle");
+      });
+
+      clearPreviewBtn.addEventListener("click", () => {
+        const iframeDoc =
+          previewIframe.contentDocument || previewIframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write("");
+        iframeDoc.close();
+        previewSection.style.display = "none";
+        log("🗑️ Preview cleared", "info");
+      });
+
+      // Log initialization
+      console.log("🚀 Compiler Worker Demo initialized");
+      log("📦 Worker loaded and ready", "info");
+    </script>
+  </body>
+</html>
